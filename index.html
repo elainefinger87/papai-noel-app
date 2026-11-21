@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1d3a">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script>
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+</script>
+<title>Papai Noel e os Presentes</title>
+<style>
+:root { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1d3a; touch-action: none; user-select: none; -webkit-user-select: none; }
+canvas { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let W, H, dpr;
+
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  W = innerWidth; H = innerHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+addEventListener('resize', resize);
+resize();
+
+const flakes = Array.from({ length: 80 }, () => ({
+  x: Math.random(), y: Math.random(), r: Math.random() * 2 + 1, v: Math.random() * 0.6 + 0.4
+}));
+
+let state = 'menu';   // 'menu' | 'play' | 'over'
+let score = 0, best = 0, lives = 3, speed = 160, items = [];
+let santaX = 0, targetX = 0, spawnT = 0;
+const SANTA_Y = () => H - 70;
+
+function start() {
+  score = 0; lives = 3; speed = 160; items = [];
+  santaX = W / 2; targetX = W / 2; spawnT = 0;
+  state = 'play';
+}
+
+function gameOver() {
+  state = 'over';
+  best = Math.max(best, Math.floor(score));
+}
+
+function update(dt) {
+  // flocos de neve sempre caem
+  for (const f of flakes) {
+    f.y += f.v * dt * 0.08;
+    if (f.y > 1) { f.y = 0; f.x = Math.random(); }
+  }
+  if (state !== 'play') return;
+
+  santaX += (targetX - santaX) * Math.min(1, dt * 12);
+  speed += dt * 6;
+  score += dt * 2;
+
+  spawnT -= dt;
+  if (spawnT <= 0) {
+    spawnT = Math.max(0.35, 1.1 - score / 500) * (0.6 + Math.random() * 0.6);
+    const gift = Math.random() < 0.6;
+    const gifts = ['🎁', '🎄', '🔔', '⭐'];
+    items.push({
+      x: 30 + Math.random() * (W - 60),
+      y: -40,
+      gift,
+      e: gift ? gifts[Math.floor(Math.random() * gifts.length)] : '👹',
+      vy: speed * (0.8 + Math.random() * 0.5)
+    });
+  }
+
+  const sy = SANTA_Y();
+  for (const it of items) {
+    it.y += it.vy * dt;
+    if (Math.abs(it.x - santaX) < 34 && Math.abs(it.y - sy) < 36 && !it.done) {
+      it.done = true;
+      if (it.gift) {
+        score += 10;
+      } else {
+        lives--;
+        if (lives <= 0) { gameOver(); return; }
+      }
+    }
+  }
+  items = items.filter(it => !it.done && it.y < H + 40);
+}
+
+function drawBackground() {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#0b1d3a');
+  g.addColorStop(1, '#1d3f6e');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.fillStyle = '#ffffff';
+  for (const f of flakes) {
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    ctx.arc(f.x * W, f.y * H, f.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // chão de neve
+  ctx.fillStyle = '#f4f8ff';
+  ctx.beginPath();
+  ctx.ellipse(W / 2, H + 10, W * 0.8, 50, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawText(t, x, y, size, color = '#ffffff', bold = true) {
+  ctx.font = `${bold ? 'bold ' : ''}${size}px system-ui, sans-serif`;
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(t, x, y);
+}
+
+function drawGrinch(x, y) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = '#7fc23b';
+  // orelhas pontudas
+  ctx.beginPath(); ctx.moveTo(-16, -4); ctx.lineTo(-34, -14); ctx.lineTo(-14, 10); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(16, -4); ctx.lineTo(34, -14); ctx.lineTo(14, 10); ctx.fill();
+  // cabeça
+  ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI * 2); ctx.fill();
+  // olhos
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(-7, -4, 5, 0, Math.PI * 2); ctx.arc(7, -4, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#c00000';
+  ctx.beginPath(); ctx.arc(-7, -4, 2, 0, Math.PI * 2); ctx.arc(7, -4, 2, 0, Math.PI * 2); ctx.fill();
+  // sobrancelhas franzidas
+  ctx.strokeStyle = '#2d5a16';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-13, -11); ctx.lineTo(-3, -7);
+  ctx.moveTo(13, -11); ctx.lineTo(3, -7);
+  ctx.stroke();
+  // sorriso malvado
+  ctx.beginPath(); ctx.moveTo(-10, 7); ctx.quadraticCurveTo(0, 14, 10, 6); ctx.stroke();
+  // gorro vermelho do Papai Noel (roubado)
+  ctx.fillStyle = '#d10000';
+  ctx.beginPath(); ctx.moveTo(-18, -14); ctx.quadraticCurveTo(4, -22, 14, -34); ctx.lineTo(20, -14); ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(-21, -17, 42, 6);
+  ctx.beginPath(); ctx.arc(14, -34, 4, 0, Math.PI * 2); ctx.fill();
+  // pernas balançando em oposição
+  const s = Math.sin(performance.now() / 160 + x * 0.05);
+  ctx.strokeStyle = '#7fc23b';
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-7, 18); ctx.lineTo(-7 + s * 12, 36); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(7, 18); ctx.lineTo(7 - s * 12, 36); ctx.stroke();
+  ctx.restore();
+}
+
+function draw() {
+  drawBackground();
+
+  if (state === 'menu') {
+    drawText('🎅 Papai Noel e os Presentes', W / 2, H * 0.3, Math.min(30, W / 14));
+    drawText('Arraste o dedo ou use ← → para mover.', W / 2, H * 0.42, 16, '#dbe7ff', false);
+    drawText('Pegue os presentes 🎁 e desvie do Grinch 👹, que odeia o Natal.', W / 2, H * 0.47, 16, '#dbe7ff', false);
+    drawText('Toque para começar', W / 2, H * 0.6, 22, '#ffd166');
+    return;
+  }
+
+  // itens
+  for (const it of items) {
+    ctx.font = '36px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (it.gift) ctx.fillText(it.e, it.x, it.y);
+    else drawGrinch(it.x, it.y);
+  }
+
+  // papai noel
+  ctx.font = '56px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🎅', santaX, SANTA_Y());
+
+  // HUD
+  drawText(`Pontos: ${Math.floor(score)}`, 16 + 60, 26, 18, '#ffffff');
+  drawText(`Vidas: ${'❤️'.repeat(lives)}`, W - 16 - 70, 26, 18, '#ffffff');
+
+  if (state === 'over') {
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, 0, W, H);
+    drawText('Fim de jogo!', W / 2, H * 0.36, Math.min(36, W / 10), '#ff6b6b');
+    drawText(`Pontuação: ${Math.floor(score)}`, W / 2, H * 0.45, 24);
+    drawText(`Recorde: ${best}`, W / 2, H * 0.51, 20, '#ffd166');
+    drawText('Toque para jogar de novo', W / 2, H * 0.62, 20, '#dbe7ff', false);
+  }
+}
+
+// controles
+function clampTarget() {
+  targetX = Math.max(30, Math.min(W - 30, targetX));
+}
+
+cv.addEventListener('pointerdown', e => {
+  if (state !== 'play') { start(); return; }
+  targetX = e.clientX;
+  clampTarget();
+});
+
+cv.addEventListener('pointermove', e => {
+  if (state === 'play' && e.buttons) {
+    targetX = e.clientX;
+    clampTarget();
+  }
+});
+
+addEventListener('keydown', e => {
+  if (state !== 'play') {
+    if (e.key === 'Enter' || e.key === ' ') start();
+    return;
+  }
+  if (e.key === 'ArrowLeft') targetX -= 40;
+  if (e.key === 'ArrowRight') targetX += 40;
+  clampTarget();
+});
+
+// loop
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
